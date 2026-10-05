@@ -1,0 +1,56 @@
+{
+  "name": "dsh-reasoning-cycle",
+  "description": "Shift+Tab cycles the current DSH session's reasoning effort through the levels its selected model declares, wrapped in a ring that leads with the provider default",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node test/client.test.mjs && node test/registration.test.mjs"
+  },
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "cordis.patch.yml"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "plugin",
+    "shortcut",
+    "reasoning-effort",
+    "thinking-level",
+    "web-gui"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/1dustycy/dsh-reasoning-cycle.git"
+  },
+  "homepage": "https://github.com/1dustycy/dsh-reasoning-cycle#readme",
+  "bugs": {
+    "url": "https://github.com/1dustycy/dsh-reasoning-cycle/issues"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.4 <5"
+  }
+}
