@@ -130,34 +130,56 @@ const cycle = loadBundle();
 
 // --- the ring ---------------------------------------------------------------
 
-assert.deepEqual(cycle.reasoningRing(REASONING.efforts), [
-	void 0,
-	"low",
-	"high",
-	"max"
-], "the provider default leads the ring, then the declared levels in menu order");
+// The shipped DeepSeek shape, and the regression this suite was extended for:
+// `defaultEffort` is itself a declared level, so the provider-default stop is
+// redundant and must not survive as a second position on "high".
+assert.deepEqual(cycle.reasoningSteps([
+	{ id: "off", name: "Off" },
+	{ id: "low", name: "Low" },
+	{ id: "high", name: "High" },
+	{ id: "max", name: "Max" }
+], "high"), [
+	{ effort: "off" },
+	{ effort: "low" },
+	{ effort: "high" },
+	{ effort: "max" }
+], "a declared default joins the declared levels instead of adding a duplicate stop");
 
-assert.deepEqual(cycle.reasoningRing(undefined), [void 0], "a model with no reasoning metadata still has the provider-default step");
-assert.deepEqual(cycle.reasoningRing([]), [void 0], "an empty effort list is the same as no metadata");
-assert.deepEqual(cycle.reasoningRing([
+assert.deepEqual(cycle.reasoningSteps(REASONING.efforts, "medium"), [
+	{ effort: void 0 },
+	{ effort: "low" },
+	{ effort: "high" },
+	{ effort: "max" }
+], "a provider default outside the declared levels leads the ring as its own stop");
+
+assert.deepEqual(cycle.reasoningSteps(REASONING.efforts, void 0), [
+	{ effort: void 0 },
+	{ effort: "low" },
+	{ effort: "high" },
+	{ effort: "max" }
+], "an undeclared provider default is a real, reachable stop");
+
+assert.deepEqual(cycle.reasoningSteps(void 0, "high"), [{ effort: void 0 }], "a model with no reasoning metadata has only the provider-default stop");
+assert.deepEqual(cycle.reasoningSteps([], void 0), [{ effort: void 0 }], "an empty effort list is the same as no metadata");
+assert.deepEqual(cycle.reasoningSteps([
 	{ id: "high", name: "High" },
 	{ name: "broken" },
 	null,
 	{ id: "", name: "empty" }
-]), [
-	void 0,
-	"high"
-], "levels without a usable id are skipped rather than becoming ring positions");
+], "high"), [{ effort: "high" }], "levels without a usable id are skipped rather than becoming stops");
 
 // --- one step ---------------------------------------------------------------
 
-const ring = cycle.reasoningRing(REASONING.efforts);
-assert.deepEqual(cycle.nextReasoningStep(ring, void 0), { effort: "low" }, "the provider default advances to the first level");
-assert.deepEqual(cycle.nextReasoningStep(ring, "low"), { effort: "high" }, "levels advance in declared order");
-assert.deepEqual(cycle.nextReasoningStep(ring, "max"), { effort: void 0 }, "the last level wraps back to the provider default");
-assert.deepEqual(cycle.nextReasoningStep(ring, "medium"), { effort: "low" }, "an effort the model no longer declares advances to the first level");
-assert.equal(cycle.nextReasoningStep([void 0], void 0), void 0, "a model with no declared level has nowhere to advance");
-assert.deepEqual(cycle.nextReasoningStep([void 0, "max"], "max"), { effort: void 0 }, "a single-level model still wraps");
+const steps = cycle.reasoningSteps(REASONING.efforts, "high");
+assert.deepEqual(cycle.nextStep(steps, "low"), { effort: "high" }, "levels advance in declared order");
+assert.deepEqual(cycle.nextStep(steps, "max"), { effort: "low" }, "the last level wraps to the first declared level");
+assert.deepEqual(cycle.nextStep(steps, "medium"), { effort: "low" }, "an effort the model no longer declares advances to the first stop");
+assert.deepEqual(cycle.nextStep([
+	{ effort: void 0 },
+	{ effort: "high" },
+	{ effort: "max" }
+], "max"), { effort: void 0 }, "a ring whose first stop is the provider default wraps back onto it");
+assert.deepEqual(cycle.nextStep([{ effort: void 0 }], void 0), { effort: void 0 }, "a model with no declared level can only advance to the stop it is already on, which the plan then refuses");
 
 // --- the command ------------------------------------------------------------
 
@@ -221,8 +243,9 @@ assert.deepEqual(cycle.nextReasoningStep([void 0, "max"], "max"), { effort: void
 	press(ctx, ctx.get("shortcuts").registered[0]);
 	assert.deepEqual(selections, [{
 		provider: "deepseek-account",
-		model: "deepseek-flash"
-	}], "wrapping past the last level asks for the provider default by omitting the field");
+		model: "deepseek-flash",
+		reasoningEffort: "low"
+	}], "with a declared default there is no provider-default stop to wrap onto, so max returns to low");
 }
 
 {
@@ -289,6 +312,100 @@ assert.deepEqual(cycle.nextReasoningStep([void 0, "max"], "max"), { effort: void
 		model: "deepseek-flash",
 		reasoningEffort: "max"
 	}], "an unsettled pick is the tip of the chain, so a quick second press does not repeat the first step");
+}
+
+// --- a full turn around the ring ---------------------------------------------
+//
+// This is the regression the diagnostic panel found in the app: with the shipped
+// DeepSeek metadata (`defaultEffort: "high"` and `high` also declared), the old
+// ring held both a provider-default stop and a `high` stop, so pressing the key
+// from `max` landed on `high` and every later press bounced between those two.
+// The sequence below must visit every declared level exactly once per turn.
+
+{
+	selections.length = 0;
+	let live = {
+		provider: "deepseek-account",
+		model: "deepseek-flash",
+		reasoningEffort: "high"
+	};
+	const directory = {
+		store: {
+			getSnapshot: () => ({
+				current: live,
+				pending: null
+			})
+		},
+		select(input) {
+			selections.push(input);
+			live = {
+				...live,
+				...input.reasoningEffort === void 0 ? { reasoningEffort: void 0 } : { reasoningEffort: input.reasoningEffort }
+			};
+			return Promise.resolve({
+				ok: true,
+				value: void 0
+			});
+		}
+	};
+	const services = {
+		sessions: {
+			list: {
+				getSnapshot: () => ({
+					byId: {
+						"s-1": {
+							id: "s-1",
+							retainedBy: { mainView: 1 }
+						}
+					}
+				})
+			}
+		},
+		modelDirectories: {
+			directoryFor: () => directory,
+			catalog: {
+				reasoningFor: () => ({
+					defaultEffort: "high",
+					efforts: [
+						{ id: "off", name: "Off" },
+						{ id: "low", name: "Low" },
+						{ id: "high", name: "High" },
+						{ id: "max", name: "Max" }
+					]
+				})
+			}
+		},
+		shortcuts: {
+			registered: [],
+			register(command) {
+				this.registered.push(command);
+				return () => {};
+			}
+		},
+		locale: {
+			register: () => () => {},
+			bind: () => (key) => key
+		}
+	};
+	const ctx = {
+		...services,
+		get: (name) => services[name],
+		effect: (body) => body()
+	};
+	cycle.apply(ctx);
+	const [command] = services.shortcuts.registered;
+	const seen = [];
+	for (let round = 0; round < 4; round += 1) {
+		press(ctx, command);
+		seen.push(live.reasoningEffort);
+	}
+	assert.deepEqual(seen, [
+		"max",
+		"off",
+		"low",
+		"high"
+	], "one turn visits every declared level once, in declared order, and returns to high");
+	assert.equal(selections.length, 4, "each press commits exactly one selection");
 }
 
 // --- the no-op and failure paths --------------------------------------------

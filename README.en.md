@@ -5,14 +5,20 @@ English | [简体中文](README.md)
 `Shift+Tab` advances the current session's reasoning effort by one level — a detent wheel bolted onto
 the level list the model menu already shows.
 
-The ring is derived on every keystroke from the model metadata of the moment: the provider default
-leads, then every level the selected model declares, and the level after the last one wraps back to
-the provider default. Change model, change provider, change level — the next keystroke follows.
-The plugin keeps no second copy of the level table.
+The ring is derived on every keystroke from the model metadata of the moment: it walks the levels the
+model declares, and the level after the last one wraps to the first. A leading **provider default**
+stop appears only when the level that default resolves to is *not* one of the declared levels.
+Change model, change provider, change level — the next keystroke follows. The plugin keeps no second
+copy of the level table.
 
 ```
-provider default → low → high → max → provider default → …
+DeepSeek (defaultEffort = high, and high is declared):  off → low → high → max → off → …
+A model whose default is not a declared level:          provider default → off → low → high → max → provider default → …
 ```
+
+Why the first line is not `provider default → off → …`: that spelling makes the provider default and
+`high` two adjacent ring positions pointing at the same level, so `max` steps onto `high` and never
+leaves — the user sees a two-level toggle. Derivation in ADR-0003.
 
 ## How it works
 
@@ -22,6 +28,8 @@ around the ring, and commits it through the same `ModelDirectory.select` the mod
 - the level lands in the **session projection**, exactly as a menu pick does — it survives a reload;
 - the plugin never touches the Host's RPC surface, never invents a level name, and never caches the
   level list;
+- a step that would land on the level already in effect (a one-stop ring) issues no Select — that is
+  not a step;
 - an open model menu is unaffected — the menu uses `Shift+Tab` itself to leave a drilled pane, and
   its `preventDefault` keeps the keystroke from reaching this plugin at all (see ADR-0001).
 
@@ -69,8 +77,11 @@ npm test
 
 Three suites:
 
-- `test/client.test.mjs` — the ring, one step, where `resolve` stops and `run` starts, and the
-  failure paths. Pure logic, no dependencies.
+- `test/client.test.mjs` — the shape of the ring (including "a redundant provider default leaves no
+  stop"), one step, **four presses from `high` walking a full turn**, where `resolve` stops and `run`
+  starts, and the failure paths. Pure logic, no dependencies. That walk is the ADR-0003 regression:
+  a suite that only asserts the ring's contents could not catch it, because the wrong ring matched
+  the wrong spec.
 - `test/registration.test.mjs` — reads the **real shortcut registry bundle** out of the installed
   `DeepSeek Harness.app` and runs it: the command registers, the binding resolves to `⇧ Tab`, the
   gesture dispatches to this command, and a web surface **rejects** the same default (which is what
