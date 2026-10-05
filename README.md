@@ -62,13 +62,16 @@ bundle 自带的 `cordis.patch.yml` 负责 mount 这一行（`ui-reasoning-cycle
 npm test
 ```
 
-两个套件：
+三个套件：
 
 - `test/client.test.mjs` —— 环、单步、resolve/run 的副作用边界、失败路径。纯逻辑，无依赖。
 - `test/registration.test.mjs` —— 把 **App 里真实的快捷键注册表 bundle** 从已安装的
   `DeepSeek Harness.app` 里读出来跑：命令能注册、绑定解析成 `⇧ Tab`、手势能派发到这条命令，
   并且 web 表面确实会把同样的默认键**拒掉**（用来锁住 ADR-0002 的取舍）。
   没装 App 的机器上这个套件打一行 SKIP 后退出 0。
+- `test/wiring.test.mjs` —— 按 DSH 的方式解析这条 bundle：profile 的 `dsh.profile.bundles`
+  里有它、bundle 声明的 patch 文件存在、patch 恰好 mount 一行。没装进任何 profile 时打一行
+  SKIP 后退出 0。要指向别的 profile 就设 `DSH_PROFILE_DIR`。
 
 ## 为什么要走快捷键注册表
 

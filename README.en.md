@@ -67,7 +67,7 @@ from the profile's `cordis.patch.yml`** — that only adds an empty host entry.
 npm test
 ```
 
-Two suites:
+Three suites:
 
 - `test/client.test.mjs` — the ring, one step, where `resolve` stops and `run` starts, and the
   failure paths. Pure logic, no dependencies.
@@ -76,6 +76,10 @@ Two suites:
   gesture dispatches to this command, and a web surface **rejects** the same default (which is what
   pins the ADR-0002 tradeoff). On a machine without the app installed this suite prints one SKIP line
   and exits 0.
+- `test/wiring.test.mjs` — resolves the bundle the way DSH does: the profile's
+  `dsh.profile.bundles` lists it, the patch file the bundle declares exists, and that patch mounts
+  exactly one row. Prints one SKIP line and exits 0 when no profile links the package; point it
+  elsewhere with `DSH_PROFILE_DIR`.
 
 ## Why go through the shortcut registry
 
